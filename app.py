@@ -6,44 +6,55 @@ import os
 import json
 
 app = Flask(__name__)
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"  # Csak fejlesztéshez
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"  # Csak fejlesztéshez, HTTPS nélkül
 
-# 🧠 Google OAuth beállításaid
-CLIENT_ID = "IDE_IRD_A_CLIENT_ID-T"
-CLIENT_SECRET = "IDE_IRD_A_CLIENT_SECRET-ET"
-REDIRECT_URI = "https://YOURDOMAIN.onrender.com/auth/callback"
+CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+REDIRECT_URI = os.getenv("REDIRECT_URI")
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-
 TOKENS_FILE = "tokens.json"
 
-# 🔐 OAuth flow elindítása
+@app.route("/")
+def index():
+    return "Tanári Drive Backend fut rendesen! 🚀"
+
 @app.route("/auth/start")
 def auth_start():
-    flow = Flow.from_client_config({
-        "web": {
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [REDIRECT_URI]
-        }
-    }, scopes=SCOPES)
-    flow.redirect_uri = REDIRECT_URI
+    print("Redirect URI:", REDIRECT_URI)
+    print("Client ID:", CLIENT_ID)
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [REDIRECT_URI]
+            }
+        },
+        scopes=SCOPES,
+        redirect_uri=REDIRECT_URI
+    )
+
     auth_url, _ = flow.authorization_url(prompt="consent", include_granted_scopes="true")
     return redirect(auth_url)
 
-# 🧠 Google visszahívás (callback)
 @app.route("/auth/callback")
 def auth_callback():
-    flow = Flow.from_client_config({
-        "web": {
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [REDIRECT_URI]
-        }
-    }, scopes=SCOPES, redirect_uri=REDIRECT_URI)
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [REDIRECT_URI]
+            }
+        },
+        scopes=SCOPES,
+        redirect_uri=REDIRECT_URI
+    )
 
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
@@ -67,9 +78,8 @@ def auth_callback():
     with open(TOKENS_FILE, "w") as f:
         json.dump(tokens, f, indent=2)
 
-    return f"Sikeres bejelentkezés! Üdv, {email}."
+    return f"Sikeres hitelesítés: {email}"
 
-# 📦 Fájl feltöltése a Google Drive-ra
 @app.route("/upload-file", methods=["POST"])
 def upload_file():
     data = request.json
@@ -96,7 +106,6 @@ def upload_file():
     media = {"mimeType": "text/plain", "body": content}
 
     file = drive.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
     return {"message": "Sikeres feltöltés", "file_id": file.get("id")}
 
 if __name__ == "__main__":
